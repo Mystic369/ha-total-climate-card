@@ -1,0 +1,270 @@
+# Smart Nighttime Comfort Control Automation
+
+## Description
+Automatically maintains your target "feels like" temperature during nighttime hours (6pm-6am) by adjusting thermostat setpoints based on actual thermal comfort rather than just temperature.
+
+## Features
+- Runs every 5 minutes between 6pm-6am
+- Adjusts thermostat to maintain target "feels like" temperature
+- Voice control compatible
+- Manual override switch
+- Activates basement/auxiliary heat when outdoor temp drops below 32°F
+- Logs all adjustments to logbook
+
+## Requirements
+
+### Required Entities
+1. **Thermal Comfort Integration** - Install from HACS
+   - Creates `sensor.thermal_comfort_heat_index`
+   
+2. **Target Temperature Helper** - Create in HA:
+   - Settings → Devices & Services → Helpers → Create Helper → Number
+   - Name: "Target Feels Like Temperature"
+   - Min: 68, Max: 78, Step: 1, Initial: 73
+   - Creates: `input_number.target_feels_like_temperature`
+
+3. **Override Switch Helper** - Create in HA:
+   - Settings → Devices & Services → Helpers → Create Helper → Toggle
+   - Name: "Smart Comfort Override"
+   - Creates: `input_boolean.smart_comfort_override`
+
+### Optional Voice Control Scripts
+Create these for "Alexa/Google Assistant" style voice commands:
+
+```yaml
+# Script 1: Set Feels Like 70
+alias: Set Feels Like 70
+sequence:
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.target_feels_like_temperature
+    data:
+      value: 70
+mode: single
+
+# Script 2: Set Feels Like 72
+alias: Set Feels Like 72
+sequence:
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.target_feels_like_temperature
+    data:
+      value: 72
+mode: single
+
+# Script 3: Set Feels Like 73
+alias: Set Feels Like 73
+sequence:
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.target_feels_like_temperature
+    data:
+      value: 73
+mode: single
+
+# Script 4: Set Feels Like 75
+alias: Set Feels Like 75
+sequence:
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.target_feels_like_temperature
+    data:
+      value: 75
+mode: single
+```
+
+Then say: "Run set feels like 73" to your voice assistant!
+
+## Installation
+
+1. **Create the required helpers** (see Requirements above)
+
+2. **Update entity IDs** in the automation below to match your setup:
+   - `climate.thermostat` → Your upstairs thermostat
+   - `sensor.thermal_comfort_heat_index` → Your thermal comfort sensor
+   - `sensor.thermostat_outdoor_temperature` → Your outdoor temp sensor
+   - `humidifier.thermostat_dehumidifier` → Your dehumidifier (if applicable)
+   - `climate.smart_thermostat_XXX` → Your downstairs/basement thermostat (optional)
+
+3. **Copy the automation YAML** below to Settings → Automations → Create Automation → Edit in YAML
+
+4. **Adjust base setpoints** if needed:
+   - `base_heat_setpoint: 73` → Your preferred heat setpoint
+   - `base_cool_setpoint: 76` → Your preferred cool setpoint
+
+## Automation YAML
+
+```yaml
+alias: Smart Nighttime Comfort Control
+description: Maintains target feels-like temperature from 6pm-6am
+triggers:
+  - trigger: time_pattern
+    minutes: /5
+conditions:
+  - condition: time
+    after: "18:00:00"
+    before: "06:00:00"
+  - condition: state
+    entity_id: input_boolean.smart_comfort_override
+    state: "off"
+actions:
+  - variables:
+      target_feels_like: "{{ states('input_number.target_feels_like_temperature') | float(73) }}"
+      feels_like_current: "{{ states('sensor.thermal_comfort_heat_index') | float(73) }}"
+      feels_like_diff: "{{ target_feels_like - feels_like_current }}"
+      outdoor_temp: "{{ states('sensor.thermostat_outdoor_temperature') | float(50) }}"
+      base_heat_setpoint: 73
+      base_cool_setpoint: 76
+      max_adjustment: 5
+  - choose:
+      - conditions:
+          - condition: template
+            value_template: "{{ feels_like_diff | abs > 0.5 }}"
+        sequence:
+          - variables:
+              adjustment: "{{ [[feels_like_diff, max_adjustment] | min, -max_adjustment] | max }}"
+              new_heat_setpoint: "{{ (base_heat_setpoint + adjustment) | round(0) }}"
+              new_cool_setpoint: "{{ (base_cool_setpoint + adjustment) | round(0) }}"
+          - action: climate.set_temperature
+            target:
+              entity_id: climate.thermostat
+            data:
+              hvac_mode: heat_cool
+              target_temp_low: "{{ new_heat_setpoint }}"
+              target_temp_high: "{{ new_cool_setpoint }}"
+          - action: humidifier.set_humidity
+            target:
+              entity_id: humidifier.thermostat_dehumidifier
+            data:
+              humidity: 55
+          - action: logbook.log
+            data:
+              name: Smart Comfort
+              message: >
+                Target: {{ target_feels_like }}°F | Current: {{ feels_like_current }}°F
+                Adjustment: {{ adjustment }}°F
+                New setpoints: Heat {{ new_heat_setpoint }}°F / Cool {{ new_cool_setpoint }}°F
+  - choose:
+      - conditions:
+          - condition: numeric_state
+            entity_id: sensor.thermostat_outdoor_temperature
+            below: 32
+          - condition: template
+            value_template: "{{ feels_like_current < 70 }}"
+        sequence:
+          - action: climate.set_hvac_mode
+            target:
+              entity_id: climate.smart_thermostat_2311165277002660120448e1e9e1f9e7
+            data:
+              hvac_mode: heat
+          - action: logbook.log
+            data:
+              name: Basement Heat
+              message: "Activated - Outdoor: {{ outdoor_temp }}°F, Feels-like: {{ feels_like_current }}°F"
+    default:
+      - action: climate.set_hvac_mode
+        target:
+          entity_id: climate.smart_thermostat_2311165277002660120448e1e9e1f9e7
+        data:
+          hvac_mode: "off"
+mode: single
+```
+
+## Usage
+
+### Normal Operation
+- Automation runs automatically between 6pm-6am
+- Checks feels-like temperature every 5 minutes
+- Adjusts thermostat setpoints to maintain target comfort level
+
+### Voice Control (if scripts created)
+Say to your voice assistant:
+- "Run set feels like 70"
+- "Run set feels like 72"
+- "Run set feels like 73"
+- "Run set feels like 75"
+
+### Manual Control
+1. **Dashboard Slider**: Add the helper to a dashboard card for manual adjustment
+2. **Override Switch**: Toggle `input_boolean.smart_comfort_override` ON to pause automation
+
+### Checking Logs
+- Settings → System → Logbook
+- Search for "Smart Comfort"
+- View all adjustments made throughout the night
+
+## Customization
+
+### Adjust Active Hours
+Change the time conditions:
+```yaml
+conditions:
+  - condition: time
+    after: "18:00:00"  # Start time (6pm)
+    before: "06:00:00"  # End time (6am)
+```
+
+### Change Check Frequency
+Adjust the time pattern trigger:
+```yaml
+triggers:
+  - trigger: time_pattern
+    minutes: /5  # Check every 5 minutes (change to /10 for every 10 minutes)
+```
+
+### Adjust Sensitivity
+Change the threshold for when adjustments are made:
+```yaml
+value_template: "{{ feels_like_diff | abs > 0.5 }}"  # Adjust if difference > 0.5°F
+```
+
+### Modify Max Adjustment
+Limit how much the setpoint can change:
+```yaml
+max_adjustment: 5  # Maximum ±5°F adjustment from base setpoint
+```
+
+### Change Target Dehumidifier Level
+```yaml
+- action: humidifier.set_humidity
+  data:
+    humidity: 55  # Change to your preferred humidity level
+```
+
+## Troubleshooting
+
+### Automation Not Running
+- Check that override switch is OFF
+- Verify time is between 6pm-6am
+- Check automation is enabled
+
+### No Adjustments Being Made
+- Verify `sensor.thermal_comfort_heat_index` exists and has valid data
+- Check that difference between target and current is > 0.5°F
+- Review logbook for any error messages
+
+### Thermostat Not Responding
+- Verify thermostat entity ID is correct
+- Check thermostat supports `heat_cool` mode
+- Ensure thermostat is not in a manual override mode
+
+### Voice Commands Not Working
+- Verify voice control scripts are created
+- Check scripts are exposed to voice assistant
+- Try the full entity name in voice command
+
+## Example Dashboard Card
+
+Add this to show the target temperature slider and override switch:
+
+```yaml
+type: entities
+title: Comfort Control
+entities:
+  - entity: input_number.target_feels_like_temperature
+    name: Target Feels Like
+  - entity: input_boolean.smart_comfort_override
+    name: Manual Override
+  - entity: sensor.thermal_comfort_heat_index
+    name: Current Feels Like
+```

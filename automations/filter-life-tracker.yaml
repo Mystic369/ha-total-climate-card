@@ -1,0 +1,318 @@
+# Filter Life Tracker Automation
+
+## Description
+Automatically tracks your HVAC filter life with daily countdown and visual alerts on your Total Climate Card.
+
+## Features
+- Automatic daily countdown at midnight
+- Color-coded visual alerts:
+  - **Green**: 30+ days remaining
+  - **Yellow**: 15-30 days remaining  
+  - **Red** (pulsing): <15 days remaining
+- One-click reset after filter replacement
+- Tracks days since last change
+
+## Requirements
+
+### Required Helper
+Create a Number helper in Home Assistant:
+
+1. Go to Settings → Devices & Services → Helpers
+2. Click "Create Helper"
+3. Select "Number"
+4. Configure:
+   - **Name**: `Filter Days Remaining`
+   - **Icon**: `mdi:air-filter`
+   - **Minimum value**: `0`
+   - **Maximum value**: `365`
+   - **Step size**: `1`
+   - **Initial value**: `90` (or your filter's lifespan in days)
+   - **Unit of measurement**: `days`
+   - **Display mode**: Box or Slider
+
+This creates: `input_number.filter_days_remaining`
+
+## Installation
+
+### Step 1: Create the Helper
+Follow the requirements above to create `input_number.filter_days_remaining`
+
+### Step 2: Add Daily Countdown Automation
+
+**Option A: Using Home Assistant UI**
+1. Settings → Automations & Scenes → Automations
+2. Click "Create Automation"
+3. Click "Create new automation"
+4. Add Trigger → Time → 00:00:00 (midnight)
+5. Add Action → Call service → `input_number.decrement`
+6. Choose Entity → `input_number.filter_days_remaining`
+7. Save as "Filter Counter Daily Countdown"
+
+**Option B: Using YAML**
+```yaml
+alias: Filter Counter Daily Countdown
+triggers:
+  - trigger: time
+    at: "00:00:00"
+conditions: []
+actions:
+  - action: input_number.decrement
+    target:
+      entity_id: input_number.filter_days_remaining
+mode: single
+```
+
+### Step 3: Add to Total Climate Card
+Add the filter button to your `bottom_buttons` configuration:
+
+```yaml
+bottom_buttons:
+  - label: FILTER
+    icon: 🔧
+    entity: input_number.filter_days_remaining
+    unit: " days"
+    thresholds:
+      warning_low: 30
+      critical_low: 15
+    tap_action:
+      action: call-service
+      service: input_number.set_value
+      service_data:
+        entity_id: input_number.filter_days_remaining
+        value: 90
+```
+
+**Note**: Change `value: 90` to match your filter's lifespan (60, 90, 120, etc.)
+
+## Usage
+
+### Initial Setup
+1. Install a new filter
+2. Manually set the helper to the filter's lifespan:
+   - Settings → Devices & Services → Helpers
+   - Click "Filter Days Remaining"
+   - Set to number of days (e.g., 90)
+
+### Daily Operation
+- Automation runs at midnight
+- Counter decrements by 1 day automatically
+- Card button shows current days remaining with color coding
+
+### After Filter Replacement
+**On the Total Climate Card:**
+1. Click the FILTER button
+2. Counter resets to 90 days (or your configured lifespan)
+3. Color returns to green
+
+**OR manually:**
+1. Settings → Devices & Services → Helpers
+2. Click "Filter Days Remaining"  
+3. Set back to full lifespan value
+
+## Color Coding
+
+### Green (Normal)
+- **Days**: 30+
+- **Status**: Filter is fresh, no action needed
+- **Example**: "90 days" in green
+
+### Yellow (Warning)
+- **Days**: 15-30
+- **Status**: Time to order a replacement filter
+- **Example**: "25 days" in yellow
+
+### Red (Critical)
+- **Days**: <15
+- **Status**: Replace filter immediately
+- **Animation**: Pulsing red alert
+- **Example**: "10 days" in pulsing red
+
+## Customization
+
+### Change Filter Lifespan
+Update both locations:
+
+1. **Initial value in helper**: Settings → Devices & Services → Helpers → Filter Days Remaining → Set maximum/initial value
+
+2. **Reset value in card config**:
+```yaml
+tap_action:
+  action: call-service
+  service: input_number.set_value
+  service_data:
+    value: 120  # Change to your filter lifespan
+```
+
+### Adjust Color Thresholds
+Modify the warning and critical thresholds:
+
+```yaml
+thresholds:
+  warning_low: 45   # Yellow at 45 days
+  critical_low: 20  # Red at 20 days
+```
+
+### Change Countdown Time
+Run the countdown at a different time:
+
+```yaml
+triggers:
+  - trigger: time
+    at: "08:00:00"  # Run at 8am instead of midnight
+```
+
+### Track Multiple Filters
+Create additional helpers and buttons:
+
+```yaml
+# Helper 1: Upstairs Filter
+input_number.upstairs_filter_days
+
+# Helper 2: Downstairs Filter  
+input_number.downstairs_filter_days
+
+# Add to card:
+bottom_buttons:
+  - label: UP FILTER
+    entity: input_number.upstairs_filter_days
+    unit: " days"
+    thresholds:
+      warning_low: 30
+      critical_low: 15
+  - label: DOWN FILTER
+    entity: input_number.downstairs_filter_days
+    unit: " days"
+    thresholds:
+      warning_low: 30
+      critical_low: 15
+```
+
+## Notifications (Optional)
+
+### Add Notification When Filter Needs Replacement
+
+```yaml
+alias: Filter Replacement Reminder
+triggers:
+  - trigger: numeric_state
+    entity_id: input_number.filter_days_remaining
+    below: 15
+conditions: []
+actions:
+  - action: notify.mobile_app
+    data:
+      title: "HVAC Filter Alert"
+      message: "Only {{ states('input_number.filter_days_remaining') }} days remaining. Time to replace the filter!"
+      data:
+        priority: high
+        tag: filter_alert
+mode: single
+```
+
+### Add Weekly Status Notification
+
+```yaml
+alias: Weekly Filter Status
+triggers:
+  - trigger: time
+    at: "09:00:00"
+  - condition: time
+    weekday: sun
+actions:
+  - action: notify.mobile_app
+    data:
+      title: "Filter Status"
+      message: "{{ states('input_number.filter_days_remaining') }} days remaining until filter replacement"
+mode: single
+```
+
+## Dashboard Cards (Optional)
+
+### Simple Status Card
+```yaml
+type: entities
+title: Filter Status
+entities:
+  - entity: input_number.filter_days_remaining
+    name: Days Until Replacement
+    icon: mdi:air-filter
+```
+
+### Gauge Card
+```yaml
+type: gauge
+entity: input_number.filter_days_remaining
+name: Filter Life
+min: 0
+max: 90
+needle: true
+segments:
+  - from: 0
+    color: '#db4437'
+  - from: 15
+    color: '#ff9800'
+  - from: 30
+    color: '#0da035'
+```
+
+### Markdown Card with Details
+```yaml
+type: markdown
+content: |
+  ## HVAC Filter Status
+  
+  **Days Remaining:** {{ states('input_number.filter_days_remaining') }}
+  
+  **Status:** 
+  {% if states('input_number.filter_days_remaining')|int > 30 %}
+  ✅ Filter is good
+  {% elif states('input_number.filter_days_remaining')|int > 15 %}
+  ⚠️ Order replacement soon
+  {% else %}
+  🚨 Replace filter now!
+  {% endif %}
+  
+  **Last Changed:** {{ relative_time(states.input_number.filter_days_remaining.last_changed) }} ago
+```
+
+## Troubleshooting
+
+### Counter Not Decreasing
+- Verify automation is enabled
+- Check automation runs at midnight (check logbook)
+- Manually run automation to test: Settings → Automations → Filter Counter Daily Countdown → Run
+
+### Button Shows "--"
+- Verify helper exists: `input_number.filter_days_remaining`
+- Check helper has a numeric value
+- Ensure entity ID in card config matches helper
+
+### Colors Not Changing
+- Verify thresholds are configured in card
+- Check helper value is numeric
+- Refresh browser cache (Ctrl+Shift+R)
+
+### Reset Button Not Working
+- Verify tap_action service name is correct
+- Check entity_id matches your helper
+- Review browser console for errors (F12)
+
+### Can't Create Helper
+- Ensure you have admin privileges
+- Try restarting Home Assistant
+- Check for integration errors in Settings → System → Logs
+
+## Tips
+
+- **Standard filters**: 30-90 day lifespan (check filter package)
+- **HEPA filters**: 90-180 day lifespan
+- **Budget tip**: Buy filters in bulk packs
+- **Set reminder**: Add calendar event when you reset counter
+- **Track costs**: Note filter price in a markdown card
+
+## Related Automations
+
+Combine with other climate automations:
+- Alert when filter needs replacement AND system running time is high
+- Automatically adjust fan speed when filter is dirty
+- Track filter changes in Google Calendar/Notion
