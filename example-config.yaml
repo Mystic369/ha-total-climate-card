@@ -1,0 +1,241 @@
+# Example Configurations for HA Total Climate Card
+
+## Minimal Configuration
+# Basic setup with just thermostat control
+
+```yaml
+type: custom:ha-total-climate-card
+name: Climate Control
+thermostats:
+  - entity: climate.thermostat
+    name: Main Thermostat
+weather_entity: weather.home
+```
+
+## Multi-Zone Configuration
+# Two thermostats with separate control
+
+```yaml
+type: custom:ha-total-climate-card
+name: Home Climate
+thermostats:
+  - entity: climate.upstairs_thermostat
+    name: Upstairs
+  - entity: climate.downstairs_thermostat
+    name: Downstairs
+weather_entity: weather.home
+outdoor_temperature: sensor.outdoor_temp
+outdoor_humidity: sensor.outdoor_humidity
+```
+
+## With Dehumidifier
+# Adding humidity control
+
+```yaml
+type: custom:ha-total-climate-card
+name: Total Climate
+thermostats:
+  - entity: climate.thermostat
+    name: Main Thermostat
+  - entity: humidifier.whole_house_dehumidifier
+    name: Dehumidifier
+weather_entity: weather.home
+outdoor_temperature: sensor.outdoor_temp
+outdoor_humidity: sensor.outdoor_humidity
+```
+
+## With Thermal Comfort (Feels Like Temps)
+# Requires Thermal Comfort integration
+
+```yaml
+type: custom:ha-total-climate-card
+name: Comfort Control
+thermostats:
+  - entity: climate.thermostat
+    name: Main Thermostat
+weather_entity: weather.home
+outdoor_temperature: sensor.outdoor_temp
+outdoor_humidity: sensor.outdoor_humidity
+indoor_heat_index: sensor.thermal_comfort_heat_index
+outdoor_heat_index: sensor.thermal_comfort_heat_index_outdoor
+```
+
+## With Monitoring Buttons
+# Bottom buttons for environmental monitoring
+
+```yaml
+type: custom:ha-total-climate-card
+name: Climate Control
+thermostats:
+  - entity: climate.thermostat
+    name: Main Thermostat
+weather_entity: weather.home
+bottom_buttons:
+  - label: PRESSURE
+    icon: 🌡️
+    entity: weather.home
+    attribute: pressure
+    unit: " inHg"
+    decimal_places: 2
+    thresholds:
+      warning_low: 29.5
+      warning_high: 30.2
+      critical_low: 29.0
+      critical_high: 30.5
+  - label: HUMIDITY
+    icon: 💧
+    entity: climate.thermostat
+    attribute: current_humidity
+    unit: "%"
+    thresholds:
+      warning_low: 35
+      warning_high: 65
+  - label: TEMP
+    icon: 🌡️
+    entity: sensor.outdoor_temp
+    unit: "°F"
+```
+
+## Complete Configuration
+# All features enabled
+
+```yaml
+type: custom:ha-total-climate-card
+name: Family Room
+thermostats:
+  - entity: climate.upstairs_thermostat
+    name: Upstairs
+  - entity: climate.downstairs_thermostat
+    name: Downstairs
+  - entity: humidifier.dehumidifier
+    name: Dehumidifier Control
+weather_entity: weather.pirateweather
+outdoor_temperature: sensor.outdoor_temperature
+outdoor_humidity: sensor.outdoor_humidity
+indoor_heat_index: sensor.thermal_comfort_heat_index
+outdoor_heat_index: sensor.thermal_comfort_heat_index_2
+bottom_buttons:
+  - label: PRESSURE
+    icon: 🌡️
+    entity: weather.pirateweather
+    attribute: pressure
+    unit: " inHg"
+    decimal_places: 2
+    thresholds:
+      warning_low: 29.5
+      warning_high: 30.2
+      critical_low: 29.0
+      critical_high: 30.5
+    tap_action:
+      action: more-info
+  - label: HUMIDITY
+    icon: 💧
+    entity: climate.upstairs_thermostat
+    attribute: current_humidity
+    unit: "%"
+    thresholds:
+      warning_low: 35
+      warning_high: 65
+      critical_low: 25
+      critical_high: 75
+    tap_action:
+      action: more-info
+  - label: FILTER
+    icon: 🔧
+    entity: input_number.filter_days_remaining
+    unit: " days"
+    thresholds:
+      warning_low: 30
+      critical_low: 15
+    tap_action:
+      action: call-service
+      service: input_number.set_value
+      service_data:
+        entity_id: input_number.filter_days_remaining
+        value: 90
+  - label: CO2
+    icon: 💨
+    entity: sensor.co2_level
+    unit: " ppm"
+    thresholds:
+      warning_high: 1000
+      critical_high: 1500
+    tap_action:
+      action: more-info
+  - label: EMERG HEAT
+    icon: 🔥
+    entity: switch.emergency_heat
+cards:
+  - show_current: true
+    show_forecast: true
+    type: weather-forecast
+    entity: weather.pirateweather
+    forecast_type: twice_daily
+    secondary_info_attribute: precipitation_unit
+    forecast_slots: 4
+```
+
+## Button Tap Actions
+
+### Open More Info Dialog
+```yaml
+tap_action:
+  action: more-info
+```
+
+### Toggle Entity
+```yaml
+tap_action:
+  action: toggle
+```
+
+### Call Service
+```yaml
+tap_action:
+  action: call-service
+  service: light.turn_on
+  service_data:
+    entity_id: light.living_room
+    brightness: 255
+```
+
+### Navigate to URL
+```yaml
+tap_action:
+  action: navigate
+  navigation_path: /lovelace/climate
+```
+
+## Threshold Examples
+
+### Temperature Monitoring
+```yaml
+thresholds:
+  warning_low: 60    # Yellow below 60°F
+  warning_high: 85   # Yellow above 85°F
+  critical_low: 50   # Red below 50°F
+  critical_high: 95  # Red above 95°F
+```
+
+### Humidity Monitoring
+```yaml
+thresholds:
+  warning_low: 30    # Yellow below 30%
+  warning_high: 70   # Yellow above 70%
+  critical_low: 20   # Red below 20%
+  critical_high: 80  # Red above 80%
+```
+
+### CO2 Monitoring
+```yaml
+thresholds:
+  warning_high: 1000  # Yellow above 1000 ppm
+  critical_high: 1500 # Red above 1500 ppm
+```
+
+### Filter Life Countdown
+```yaml
+thresholds:
+  warning_low: 30  # Yellow at 30 days
+  critical_low: 15 # Red at 15 days (pulsing alert)
+```
